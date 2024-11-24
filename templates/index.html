@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+
+
+    <div class="container">
+        <div class="row">
+            {% include 'navbar.html' %}
+
+            <div class="col-md-12">
+                {% if messages %}
+                    <div class="alert-container my-3">
+                        {% for message in messages %}
+                            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                                <strong>Warning!</strong> {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"
+                                        aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="col-md-4">
+                <div class="card mt-5 text-center p-4">
+                    <div class="text-center mt-3">
+                        <h5>Record Audio</h5>
+                    </div>
+                    <hr>
+
+                    <button id="record-button" class="btn btn-primary mt-2 mb-4">Start Recording</button>
+                    <audio id="audio-preview" controls style="display: none; width: 100%"></audio>
+
+                    <form id="audio-form" method="POST" action="{% url 'index' %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="text" value="{{ text.id }}" hidden name="id">
+                        <input type="number" name="duration" hidden>
+                        <input type="file" name="audio" hidden>
+
+                        <button type="submit" class="btn btn-success mt-3" style="display: none;" id="submit-button">
+                            Submit
+                            Audio
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="card mt-5 p-4">
+                    <div class="text-center mt-3">
+                        <h5>Convert Text Data to Audio Data</h5>
+                    </div>
+                    <hr>
+                    <div class="py-3">
+                        <p>Text ID: {{ text.id }} <span
+                                style="margin-left: 20px">Total Character: {{ text.char_count }}</span></p>
+                        {{ text }}
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+    </div>
+
+    <script>
+        const recordButton = document.getElementById('record-button');
+        const audioPreview = document.getElementById('audio-preview');
+        const audioForm = document.getElementById('audio-form');
+        const submitButton = document.getElementById('submit-button');
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let duration = 0;
+        let isRecording = false;
+        let startTime;
+
+        recordButton.addEventListener('click', async () => {
+            if (!isRecording) {
+                // Start Recording
+                const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+                mediaRecorder = new MediaRecorder(stream);
+
+                mediaRecorder.start();
+                startTime = Date.now();
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    duration = Math.floor((Date.now() - startTime) / 1000); // Duration in seconds
+                    const audioBlob = new Blob(audioChunks, {type: 'audio/webm'});
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    audioPreview.src = audioUrl;
+                    audioPreview.style.display = 'block';
+
+                    // Append audio to the form
+                    const audioFileInput = audioForm.querySelector('input[name="audio"]');
+                    const audioFile = new File([audioBlob], 'recording.webm', {type: 'audio/webm'});
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(audioFile);
+                    audioFileInput.files = dataTransfer.files;
+
+                    // Append duration to the form
+                    const durationInput = audioForm.querySelector('input[name="duration"]');
+                    durationInput.value = duration;
+
+                    submitButton.style.display = 'block';
+                };
+
+                recordButton.textContent = 'Stop Recording';
+                recordButton.classList.remove('btn-primary');
+                recordButton.classList.add('btn-danger');
+                isRecording = true;
+            } else {
+                // Stop Recording
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+
+                recordButton.textContent = 'Start Recording';
+                recordButton.classList.remove('btn-danger');
+                recordButton.classList.add('btn-primary');
+                isRecording = false;
+            }
+        });
+    </script>
+
+
+
+
+{% endblock %}
